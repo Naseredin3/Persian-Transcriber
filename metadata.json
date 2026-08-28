@@ -1,0 +1,7 @@
+{
+  "name": "بیان گویا",
+  "description": "تبدیل لحن متون فارسی (محاوره، رسمی، ادبی و سلیس) همراه با گوینده و خوانش صوتی هوشمند",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
