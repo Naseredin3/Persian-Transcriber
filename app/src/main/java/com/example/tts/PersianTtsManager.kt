@@ -51,7 +51,10 @@ data class TtsPlaybackState(
     val isInitialized: Boolean = false,
     val isSynthesizingFile: Boolean = false,
     val exportedAudioPath: String? = null,
-    val readingActiveTarget: String = "" // "converted" or "original"
+    val readingActiveTarget: String = "", // "converted" or "original"
+    val activeLocaleTag: String = "fa-IR",
+    val availablePersianVoices: List<String> = emptyList(),
+    val useVocalizedReading: Boolean = true
 )
 
 class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListener {
@@ -60,6 +63,7 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
     private val _playbackState = MutableStateFlow(TtsPlaybackState())
     val playbackState: StateFlow<TtsPlaybackState> = _playbackState.asStateFlow()
 
+    private var activePersianLocale: Locale = Locale("fa", "IR")
     private var currentSentences: List<String> = emptyList()
     private var currentIndex = 0
     private var isManuallyStopped = false
@@ -71,29 +75,58 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val persianLocale = Locale("fa", "IR")
-            val result = tts?.setLanguage(persianLocale)
-            val isSupported = result != TextToSpeech.LANG_MISSING_DATA &&
-                    result != TextToSpeech.LANG_NOT_SUPPORTED
+            val candidateLocales = listOf(
+                Locale("fa", "IR"),
+                Locale("fa"),
+                Locale.forLanguageTag("fa-IR"),
+                Locale.forLanguageTag("fa")
+            )
+
+            var isSupported = false
+            for (candidate in candidateLocales) {
+                val availability = try {
+                    tts?.isLanguageAvailable(candidate) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                } catch (e: Exception) {
+                    TextToSpeech.LANG_NOT_SUPPORTED
+                }
+                if (availability != TextToSpeech.LANG_MISSING_DATA && availability != TextToSpeech.LANG_NOT_SUPPORTED) {
+                    val setResult = tts?.setLanguage(candidate)
+                    if (setResult != TextToSpeech.LANG_MISSING_DATA && setResult != TextToSpeech.LANG_NOT_SUPPORTED) {
+                        activePersianLocale = candidate
+                        isSupported = true
+                        break
+                    }
+                }
+            }
 
             if (!isSupported) {
-                // Try generic Persian
-                val fallbackFa = Locale("fa")
-                val faResult = tts?.setLanguage(fallbackFa)
-                val isFaSupported = faResult != TextToSpeech.LANG_MISSING_DATA &&
-                        faResult != TextToSpeech.LANG_NOT_SUPPORTED
-                _playbackState.value = _playbackState.value.copy(
-                    isInitialized = true,
-                    isPersianSupported = isFaSupported,
-                    engineName = tts?.defaultEngine ?: "Google TTS"
-                )
-            } else {
-                _playbackState.value = _playbackState.value.copy(
-                    isInitialized = true,
-                    isPersianSupported = true,
-                    engineName = tts?.defaultEngine ?: "Google TTS"
-                )
+                // Fallback attempt to set fa_IR directly
+                val fallbackResult = tts?.setLanguage(Locale("fa", "IR"))
+                if (fallbackResult != TextToSpeech.LANG_MISSING_DATA && fallbackResult != TextToSpeech.LANG_NOT_SUPPORTED) {
+                    activePersianLocale = Locale("fa", "IR")
+                    isSupported = true
+                } else {
+                    activePersianLocale = Locale("fa")
+                }
             }
+
+            val engine = tts?.defaultEngine ?: "Android TextToSpeech"
+            val persianVoices = try {
+                tts?.voices?.filter { v ->
+                    v.locale.language.equals("fa", ignoreCase = true) ||
+                    v.locale.toLanguageTag().startsWith("fa", ignoreCase = true)
+                }?.map { it.name } ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            _playbackState.value = _playbackState.value.copy(
+                isInitialized = true,
+                isPersianSupported = isSupported,
+                engineName = engine,
+                activeLocaleTag = "${activePersianLocale.language}-${activePersianLocale.country}".trimEnd('-'),
+                availablePersianVoices = persianVoices
+            )
 
             applyVoiceConfig()
             setupProgressListener()
@@ -111,16 +144,24 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
         val effectivePitch = (state.pitch * state.gender.pitchMultiplier).coerceIn(0.5f, 2.0f)
         val effectiveRate = (state.speechRate * state.gender.rateMultiplier).coerceIn(0.5f, 2.0f)
 
+        // Strictly enforce Persian language settings
+        try {
+            tts?.language = activePersianLocale
+        } catch (e: Exception) {
+            Log.w("PersianTtsManager", "Failed setting Persian language: ${e.message}")
+        }
+
         tts?.setPitch(effectivePitch)
         tts?.setSpeechRate(effectiveRate)
 
-        // Attempt to select specific system voice if available
+        // Attempt to select specific system voice matching gender if available
         try {
             val voices = tts?.voices
             if (!voices.isNullOrEmpty()) {
                 val targetGender = state.gender
                 val matchedVoice = voices.find { voice ->
-                    val isPersian = voice.locale.language == "fa"
+                    val isPersian = voice.locale.language.equals("fa", ignoreCase = true) ||
+                            voice.locale.toLanguageTag().startsWith("fa", ignoreCase = true)
                     if (!isPersian) return@find false
                     when (targetGender) {
                         VoiceGender.FEMALE -> voice.name.contains("female", ignoreCase = true) ||
@@ -130,7 +171,10 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
                                 voice.name.contains("fab", ignoreCase = true) ||
                                 voice.name.contains("2", ignoreCase = true)
                     }
-                } ?: voices.find { it.locale.language == "fa" }
+                } ?: voices.find {
+                    it.locale.language.equals("fa", ignoreCase = true) ||
+                    it.locale.toLanguageTag().startsWith("fa", ignoreCase = true)
+                }
 
                 if (matchedVoice != null) {
                     tts?.voice = matchedVoice
@@ -210,18 +254,50 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
         applyVoiceConfig()
     }
 
+    fun setUseVocalizedReading(enabled: Boolean) {
+        _playbackState.value = _playbackState.value.copy(useVocalizedReading = enabled)
+    }
+
+    /**
+     * Normalizes text for Persian TTS:
+     * - Strips markdown symbols (**, *, #, _, ~) to prevent TTS from reading "ستاره"
+     * - Normalizes Arabic letters (ي, ك) to Persian (ی, ک)
+     * - Preserves Persian diacritics (َ, ِ, ُ, ّ, ْ) for accurate vocalization
+     * - Formats Persian punctuation (، , ؛ , .) so TTS pauses naturally
+     */
+    fun normalizePersianForTts(rawText: String): String {
+        var cleaned = rawText
+            // Remove markdown headers, bold, italics, code blocks
+            .replace(Regex("""[*#_~`>]"""), "")
+            // Normalize Arabic Yeh and Kaf to Persian
+            .replace('ي', 'ی')
+            .replace('ك', 'ک')
+            // Replace multiple linebreaks/spaces
+            .replace(Regex("""\n+"""), " . ")
+            // Ensure spacing around Persian punctuation for natural pacing
+            .replace("،", "، ")
+            .replace("؛", "؛ ")
+            .replace("؟", "؟ ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        return cleaned
+    }
+
     fun speak(text: String, targetTag: String = "converted") {
         if (text.isBlank()) return
         stop()
 
         applyVoiceConfig()
         isManuallyStopped = false
+
+        val normalized = normalizePersianForTts(text)
+
         // Split text into meaningful sentences for smooth pacing and UI synchronization
-        val rawSentences = text.split(Regex("(?<=[.،!؟?؛\n])\\s+"))
+        val rawSentences = normalized.split(Regex("(?<=[.،!؟?؛])\\s+"))
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
-        currentSentences = if (rawSentences.isNotEmpty()) rawSentences else listOf(text.trim())
+        currentSentences = if (rawSentences.isNotEmpty()) rawSentences else listOf(normalized)
         currentIndex = 0
 
         _playbackState.value = _playbackState.value.copy(
@@ -232,6 +308,38 @@ class PersianTtsManager(private val context: Context) : TextToSpeech.OnInitListe
         )
 
         playSentenceAt(0)
+    }
+
+    /**
+     * Tests Persian speech output with a natural Persian test phrase
+     */
+    fun speakPersianTest() {
+        val testPhrase = if (_playbackState.value.gender == VoiceGender.FEMALE) {
+            "درود بر شما. صدای گوینده خانم، تنظیم‌شده برای زبان فارسی و خوانش سلیس متون."
+        } else {
+            "درود بر شما. صدای گوینده آقا، تنظیم‌شده برای زبان فارسی و خوانش مقتدر متون."
+        }
+        speak(testPhrase, "test")
+    }
+
+    /**
+     * Opens Android System Text-to-Speech settings so user can manage engines and Persian voice data
+     */
+    fun openAndroidTtsSettings(targetContext: Context) {
+        val intentList = listOf(
+            Intent("com.android.settings.TTS_SETTINGS"),
+            Intent("android.settings.TTS_SETTINGS"),
+            Intent(android.provider.Settings.ACTION_SETTINGS)
+        )
+        for (intent in intentList) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                targetContext.startActivity(intent)
+                return
+            } catch (e: Exception) {
+                // Try next intent
+            }
+        }
     }
 
     private fun playSentenceAt(index: Int) {

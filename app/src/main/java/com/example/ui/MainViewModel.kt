@@ -297,6 +297,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ttsManager.speak(textToRead, tag)
     }
 
+    /**
+     * Reads the converted text using Android TextToSpeech configured with Persian language settings.
+     * Toggles between play and stop if already speaking the converted text.
+     */
+    fun readConvertedText(preferVocalized: Boolean = true) {
+        val current = _uiState.value.currentResult ?: return
+        val tts = ttsManager.playbackState.value
+
+        if (tts.isSpeaking && tts.readingActiveTarget == "converted") {
+            stopSpeaking()
+            return
+        }
+
+        val shouldUseVocalized = preferVocalized && !current.vocalizedText.isNullOrBlank()
+        val textToSpeak = if (shouldUseVocalized) current.vocalizedText ?: current.convertedText else current.convertedText
+        ttsManager.speak(textToSpeak, "converted")
+    }
+
+    fun setUseVocalizedReading(enabled: Boolean) {
+        ttsManager.setUseVocalizedReading(enabled)
+    }
+
+    fun testPersianVoice() {
+        ttsManager.speakPersianTest()
+    }
+
+    fun openAndroidTtsSettings(context: Context) {
+        ttsManager.openAndroidTtsSettings(context)
+    }
+
     fun stopSpeaking() {
         ttsManager.stop()
     }

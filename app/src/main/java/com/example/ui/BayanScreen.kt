@@ -94,6 +94,7 @@ import com.example.ui.components.AudioPlayerControlBar
 import com.example.ui.components.AudioWaveformVisualizer
 import com.example.ui.components.HistoryBottomSheet
 import com.example.ui.components.MediaUploadSection
+import com.example.ui.components.ReadConvertedTextButton
 import com.example.ui.components.SamplePickerBottomSheet
 import com.example.ui.components.SentenceHighlightedViewer
 import com.example.ui.components.ToneSelectorChips
@@ -723,6 +724,19 @@ fun BayanScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
+                            // Primary Action: Read Converted Text using Android TextToSpeech with Persian Language settings
+                            ReadConvertedTextButton(
+                                isSpeaking = ttsState.isSpeaking && ttsState.readingActiveTarget == "converted",
+                                onToggleSpeak = {
+                                    val isVocalizedMode = uiState.viewMode == OutputViewMode.VOCALIZED
+                                    viewModel.readConvertedText(preferVocalized = isVocalizedMode || uiState.viewMode == OutputViewMode.STANDARD)
+                                },
+                                gender = ttsState.gender,
+                                localeTag = ttsState.activeLocaleTag
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
                             // Output Body based on selected Tab
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
@@ -831,6 +845,7 @@ fun BayanScreen(
                                 onSpeedChange = { viewModel.setSpeechRate(it) },
                                 onPitchChange = { viewModel.setSpeechPitch(it) },
                                 onShowSettings = { viewModel.setShowSettingsDialog(true) },
+                                onOpenAndroidSettings = { viewModel.openAndroidTtsSettings(context) },
                                 targetTitle = result.targetTone.titleFa
                             )
 
@@ -969,6 +984,8 @@ fun BayanScreen(
                 onGenderChange = { viewModel.setVoiceGender(it) },
                 onSpeedChange = { viewModel.setSpeechRate(it) },
                 onPitchChange = { viewModel.setSpeechPitch(it) },
+                onTestPersianVoice = { viewModel.testPersianVoice() },
+                onOpenAndroidTtsSettings = { viewModel.openAndroidTtsSettings(context) },
                 onSaveApiKey = { viewModel.saveCustomApiKey(it) },
                 onClearApiKey = { viewModel.clearCustomApiKey() },
                 onDismiss = { viewModel.setShowSettingsDialog(false) }

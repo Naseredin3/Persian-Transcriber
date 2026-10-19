@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Woman
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -302,6 +303,82 @@ fun AudioWaveformVisualizer(
 }
 
 @Composable
+fun ReadConvertedTextButton(
+    isSpeaking: Boolean,
+    onToggleSpeak: () -> Unit,
+    gender: VoiceGender,
+    localeTag: String = "fa-IR",
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onToggleSpeak() }
+            .testTag("read_converted_text_primary_btn"),
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSpeaking) SleekRose else SleekIndigoPrimary,
+        shadowElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isSpeaking) Icons.Filled.Stop else Icons.Filled.VolumeUp,
+                            contentDescription = if (isSpeaking) "توقف خوانش" else "خواندن متن تبدیل‌شده",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = if (isSpeaking) "توقف خوانش متن تبدیل‌شده" else "خواندن متن تبدیل‌شده با Android TextToSpeech",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (isSpeaking) "در حال خوانش به زبان فارسی ($localeTag) • ${gender.titleFa}" else "تنظیمات زبان فارسی فعال • ${gender.titleFa}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.88f)
+                    )
+                }
+            }
+
+            if (isSpeaking) {
+                AudioWaveformVisualizer(isSpeaking = true)
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color.White.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = "فارسی",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun AudioPlayerControlBar(
     ttsState: TtsPlaybackState,
     onPlay: () -> Unit,
@@ -311,6 +388,7 @@ fun AudioPlayerControlBar(
     onSpeedChange: (Float) -> Unit = {},
     onPitchChange: (Float) -> Unit = {},
     onShowSettings: () -> Unit = {},
+    onOpenAndroidSettings: () -> Unit = {},
     targetTitle: String = "",
     modifier: Modifier = Modifier
 ) {
@@ -325,6 +403,41 @@ fun AudioPlayerControlBar(
         border = BorderStroke(1.dp, SleekSlate200)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            // Persian TTS System info badge
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, SleekSlate200)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "🇮🇷 زبان: فارسی (${ttsState.activeLocaleTag})",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = SleekIndigoPrimary
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Android TextToSpeech",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SleekSlate500,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             // Row 1: Play button + Info + Settings/Export buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -376,7 +489,7 @@ fun AudioPlayerControlBar(
                             text = if (ttsState.isSpeaking && ttsState.totalSentences > 0) {
                                 "در حال خواندن جمله ${ttsState.currentSentenceIndex + 1} از ${ttsState.totalSentences}"
                             } else {
-                                "خوانش هوشمند و طبیعی به زبان فارسی"
+                                "تنظیمات زبان فارسی • خوانش سلیس و دقیق"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = SleekSlate600
@@ -818,6 +931,8 @@ fun TtsSettingsDialog(
     onGenderChange: (VoiceGender) -> Unit = {},
     onSpeedChange: (Float) -> Unit,
     onPitchChange: (Float) -> Unit,
+    onTestPersianVoice: () -> Unit = {},
+    onOpenAndroidTtsSettings: () -> Unit = {},
     onSaveApiKey: (String) -> Unit = {},
     onClearApiKey: () -> Unit = {},
     onDismiss: () -> Unit
@@ -832,7 +947,7 @@ fun TtsSettingsDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
-                text = "تنظیمات برنامه و هوش مصنوعی",
+                text = "تنظیمات برنامه و گفتار فارسی",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = SleekSlate800
@@ -843,10 +958,10 @@ fun TtsSettingsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
-                // Section 1: Permanent API Key Configuration
+                // Section 1: Persian TextToSpeech System Settings
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = SleekSlate50,
+                    color = SleekIndigoContainer,
                     border = BorderStroke(1.dp, SleekSlate200),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -856,116 +971,98 @@ fun TtsSettingsDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Key,
+                                imageVector = Icons.Filled.RecordVoiceOver,
                                 contentDescription = null,
                                 tint = SleekIndigoPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "کلید اختصاصی و دائمی Gemini API",
+                                text = "تنظیمات زبان فارسی در Android TextToSpeech",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = SleekSlate800
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "کلید شما به‌صورت امن و دائمی روی دستگاه ذخیره شده و نیازی به وارد کردن مجدد ندارد.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SleekSlate600,
-                            lineHeight = 18.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = apiKeyInput,
-                            onValueChange = {
-                                apiKeyInput = it
-                                keySavedNotification = false
-                            },
-                            placeholder = {
-                                Text("AIzaSy...", style = MaterialTheme.typography.bodySmall, color = SleekSlate400)
-                            },
-                            singleLine = true,
-                            visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { showApiKey = !showApiKey }) {
-                                    Icon(
-                                        imageVector = if (showApiKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                        contentDescription = "نمایش یا پنهان‌سازی کلید",
-                                        tint = SleekSlate500,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("api_key_input_field"),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = SleekIndigoPrimary,
-                                unfocusedBorderColor = SleekSlate200,
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                            )
-                        )
-
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
-                                onClick = {
-                                    onSaveApiKey(apiKeyInput.trim())
-                                    keySavedNotification = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SleekIndigoPrimary
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("save_api_key_btn")
+                            Text(
+                                text = "زبان صوتی فعال:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekSlate600
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surface
                             ) {
-                                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("ذخیره کلید", style = MaterialTheme.typography.labelMedium)
-                            }
-
-                            if (apiKeyInput.isNotBlank()) {
-                                TextButton(
-                                    onClick = {
-                                        apiKeyInput = ""
-                                        onClearApiKey()
-                                        keySavedNotification = false
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = SleekRose
-                                    ),
-                                    modifier = Modifier.testTag("clear_api_key_btn")
-                                ) {
-                                    Icon(Icons.Filled.KeyOff, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("حذف", style = MaterialTheme.typography.labelMedium)
-                                }
+                                Text(
+                                    text = "فارسی (ایران) • ${ttsState.activeLocaleTag}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SleekIndigoDark,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
                             }
                         }
 
-                        if (keySavedNotification) {
-                            Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "کلید دائمی با موفقیت ذخیره شد.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ToneConciseColor,
-                                fontWeight = FontWeight.Bold
+                                text = "موتور صوتی اندروید:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SleekSlate600
                             )
+                            Text(
+                                text = if (ttsState.engineName.isNotBlank()) ttsState.engineName else "Android TTS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SleekSlate800
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = onTestPersianVoice,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    contentColor = SleekIndigoPrimary
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("test_persian_tts_btn")
+                            ) {
+                                Icon(Icons.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("تست گفتار فارسی", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = onOpenAndroidTtsSettings,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_tts_settings_btn")
+                            ) {
+                                Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("تنظیمات اندروید", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
